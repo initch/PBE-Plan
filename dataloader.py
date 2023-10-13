@@ -5,7 +5,7 @@ from torch.utils import data
 
 from torchvision import datasets, transforms
 import torch
-from backdoor.base import SimpleDataset, ImageFolderDataset
+from backdoor.base import SimpleDataset, ImageFolderDataset, TinyImageNet
 
 from dataset_few import CIFAR10Few, CIFAR100Few
 
@@ -27,6 +27,9 @@ def get_mean_std(args):
 
 	elif args.dataset.lower()=='mini-imagenet':
 		return {"mean":[0.47276672, 0.4485651, 0.40345553], "std":[0.26598931, 0.25850098, 0.27272259]}
+	
+	elif args.dataset.lower()=='tiny-imagenet':
+		return {"mean":[0.485, 0.456, 0.406], "std":[0.229, 0.224, 0.225]}
 
 	elif args.dataset.lower() == 'imagenet':
 		return {"mean":[0.485, 0.456, 0.406], "std":[0.229, 0.224, 0.225]}
@@ -56,13 +59,13 @@ def get_dataset(args):
 	if args.dataset.lower()=='mnist':
 		train_dataset = datasets.MNIST("/home/bei_chen/data", train=True, download=True,
 					   transform=transforms.Compose([
-						   transforms.Resize((32, 32)),
+						#    transforms.Resize((32, 32)),
 						   transforms.ToTensor(),
 						   get_norm_trans(args),
 						]))
 		test_dataset = datasets.MNIST("/home/bei_chen/data", train=False, download=True,
 					  transform=transforms.Compose([
-						  transforms.Resize((32, 32)),
+						#   transforms.Resize((32, 32)),
 						  transforms.ToTensor(),
 						  get_norm_trans(args),
 						]))
@@ -191,6 +194,24 @@ def get_dataset(args):
 							transforms.Resize(64),
 						]),
 					   transform=transforms.Compose([
+							transforms.ToTensor(),
+							get_norm_trans(args),
+						]))
+		
+	elif args.dataset.lower() == 'tiny-imagenet':
+		train_dataset = TinyImageNet("/home/bei_chen/data/tiny-imagenet-200",
+						train=True,
+						transform=transforms.Compose([
+							transforms.RandomCrop(64, padding=4),
+							transforms.RandomHorizontalFlip(),
+							transforms.ToTensor(),
+							get_norm_trans(args),
+						]))
+		test_dataset = TinyImageNet("/home/bei_chen/data/tiny-imagenet-200",
+						train=False,
+						transform=transforms.Compose([
+							transforms.RandomCrop(64, padding=4),
+							transforms.RandomHorizontalFlip(),
 							transforms.ToTensor(),
 							get_norm_trans(args),
 						]))

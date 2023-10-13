@@ -25,13 +25,12 @@ from test.semantic import GreenCarTest, RacingStripeTest, WallTest
 from test.edge_case import EdgeCaseTest
 
 
-def train(args, teacher, teacher2, 
+def train(args, teacher,
 	student, generator, pert_generator,
 	norm_trans, norm_trans_inv, 
 	optimizer, epoch, plotter=None, 
 	):
 	teacher.eval()
-	teacher2.eval()
 	student.train()
 	generator.train()
 	pert_generator.train()
@@ -58,11 +57,6 @@ def train(args, teacher, teacher2,
 		# s_logit = student(fake_data)
 		_, _, _, _, s_logit = student(fake_data)
 
-		features_T = list(teacher.children())[:-2]
-		modelout = copy.deepcopy(torch.nn.Sequential(*features_T).cuda())
-		img_tensor = fake_data.unsqueeze(0).cuda()
-		# print(img_tensor.size())
-		out = modelout(img_tensor[0])
 
 		loss_G1 = - F.l1_loss(s_logit, t_logit)
 
@@ -82,8 +76,6 @@ def train(args, teacher, teacher2,
 
 		# real loss
 		loss_real = torch.exp(loss_one_hot - loss_oh_pre) + torch.exp(loss_information_entropy - loss_ie_pre) + loss_diversity_seeking
-		
-		loss_G3 = -out.abs().mean()
 
 		# loss_tvl1 = utils.get_image_prior_losses_l1(fake_data)
 		loss_tvl2 = utils.get_image_prior_losses_l2(fake_data)
@@ -96,8 +88,7 @@ def train(args, teacher, teacher2,
 		# else:
 		# 	loss_suspect = 0
 
-		loss_G = loss_G1 + args.loss_weight_tvl2 * loss_tvl2 + args.loss_weight_real * loss_real + args.loss_weight_feature * loss_G3
-
+		loss_G = loss_G1 + args.loss_weight_tvl2 * loss_tvl2 + args.loss_weight_real * loss_real
 		loss_G.backward()
 		optimizer_G.step()
 
@@ -201,7 +192,6 @@ def train(args, teacher, teacher2,
 				plotter.scalar('Loss_G_l1', (epoch-1)*args.epoch_iters+i, loss_G1.item())
 				plotter.scalar('Loss_G_tvl2', (epoch-1)*args.epoch_iters+i, loss_tvl2.item())
 				plotter.scalar('Loss_G_real', (epoch-1)*args.epoch_iters+i, loss_real.item())
-				plotter.scalar('Loss_G_feature', (epoch-1)*args.epoch_iters+i, loss_G3.item())
 				plotter.scalar('Loss_Gp', (epoch-1)*args.epoch_iters+i, loss_Gp.item())
 				plotter.scalar('Loss_Gp_mislead', (epoch-1)*args.epoch_iters+i, loss_mislead.item())
 				plotter.scalar('Loss_Gp_consistency', (epoch-1)*args.epoch_iters+i, loss_consistency.item())
@@ -221,8 +211,8 @@ def main():
 	parser.add_argument('--weight_decay', type=float, default=5e-4)
 	parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
 
-	parser.add_argument('--input_dir', type=str, default="train_semantic_cifar10_resnet18_e100_green-car_t0_n300")
-	parser.add_argument('--dataset', type=str, default='cifar10', choices=['mnist', 'svhn', 'cifar10', 'cifar100', 'vggface2_subset', 'mini-imagenet'], help='dataset name')
+	parser.add_argument('--input_dir', type=str, default="howto_cifar10_resnet18_tri1_3x3_t0_scale_3")
+	parser.add_argument('--dataset', type=str, default='cifar10', choices=['mnist', 'svhn', 'cifar10', 'cifar100', 'vggface2_subset', 'mini-imagenet', 'tiny-imagenet'], help='dataset name')
 	parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
 	parser.add_argument('--nz', type=int, default=256)
 
@@ -231,17 +221,15 @@ def main():
 	parser.add_argument('--loss_weight_d1', type=float, default=0.1)
 	parser.add_argument('--loss_weight_ama', type=float, default=0)
 	parser.add_argument('--loss_weight_real', type=float, default=0)
-	parser.add_argument('--loss_weight_feature', type=float, default=0)
-	# parser.add_argument('--loss_weight_suspect', type=float, default=0)
 	parser.add_argument('--loss_weight_consistency', type=float, default=0)
 	parser.add_argument('--loss_weight_adv_ama', type=float, default=0)
 	parser.add_argument('-ps', '--patch_size', type=int, default=5)
 	parser.add_argument('--nz2', type=int, default=256)
 
-	parser.add_argument('--backdoor_method', type=str, default='semantic')
+	parser.add_argument('--backdoor_method', type=str, default='howto')
 	# for Badnets
 	parser.add_argument('--trigger_offset', type=int, default=0)
-	parser.add_argument('--trigger_name', type=str, default='green-car')
+	parser.add_argument('--trigger_name', type=str, default='tri1_3x3')
 	# parser.add_argument('--multi_trigger_offset', type=list, default=[[0,0], [0,3], [5,0], [5,3]])
 	parser.add_argument('--target_class', type=int, default=0)
 
@@ -249,9 +237,9 @@ def main():
 	parser.add_argument('--adjlr',type=int, default=0)
 	
 	args = parser.parse_args()
-	args.num_classes = {"cifar10":10, "cifar100":100, "mnist":10, "vggface2_subset":100, "svhn":10, "mini-imagenet":100}.get(args.dataset, 10)
-	args.img_size = {"cifar10":32, "cifar100":32, "mnist":28, "vggface2_subset":64, "svhn":32, "mini-imagenet":64}.get(args.dataset, 32)
-	args.img_channels = {"cifar10":3, "cifar100":3, "mnist":1, "vggface2_subset":3, "svhn":3, "mini-imagenet":3}.get(args.dataset, 3)
+	args.num_classes = {"cifar10":10, "cifar100":100, "mnist":10, "vggface2_subset":100, "svhn":10, "mini-imagenet":100, "tiny-imagenet":200}.get(args.dataset, 10)
+	args.img_size = {"cifar10":32, "cifar100":32, "mnist":28, "vggface2_subset":64, "svhn":32, "mini-imagenet":64, "tiny-imagenet":64}.get(args.dataset, 32)
+	args.img_channels = {"cifar10":3, "cifar100":3, "mnist":1, "vggface2_subset":3, "svhn":3, "mini-imagenet":3, "tiny-imagenet":3}.get(args.dataset, 3)
 	
 	# if args.backdoor_method == 'DBA':
 	# 	args.multi_trigger_offset = {'DBA_1x4': [[0,0], [0,3], [5,0], [5,3]],
@@ -270,8 +258,8 @@ def main():
 	os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 	print(args)
 
-	param_string = "e_{}_ps_{}_wama_{}_wd1_{}_wtvl2_{}_wreal_{}_wft_{}_wadv_{}_wcon_{}_lrs_{}_lrg_{}_lrgp_{}"
-	param_string = param_string.format(args.epochs, args.patch_size, args.loss_weight_ama, args.loss_weight_d1, args.loss_weight_tvl2, args.loss_weight_real, args.loss_weight_feature, args.loss_weight_adv_ama, args.loss_weight_consistency, args.lr_S, args.lr_G, args.lr_Gp)
+	param_string = "e_{}_ps_{}_wama_{}_wd1_{}_wtvl2_{}_wreal_{}_wadv_{}_wcon_{}_lrs_{}_lrg_{}_lrgp_{}"
+	param_string = param_string.format(args.epochs, args.patch_size, args.loss_weight_ama, args.loss_weight_d1, args.loss_weight_tvl2, args.loss_weight_real, args.loss_weight_adv_ama, args.loss_weight_consistency, args.lr_S, args.lr_G, args.lr_Gp)
 
 	output_dir = os.path.join('logs/'+args.input_dir, __file__.split('.')[0] + "_{}_results".format(param_string))
 
@@ -290,7 +278,8 @@ def main():
 	norm_trans = get_norm_trans(args)
 	norm_trans_inv = get_norm_trans_inv(args)
 	train_ds, test_ds = get_dataset(args)
-	args.model = utils.infer_model_from_path(args.input_dir)
+	# args.model = utils.infer_model_from_path(args.input_dir)
+	args.model = 'lenet5'
 
 	if args.backdoor_method == 'Badnets':
 		trigger, target_class = utils.infer_trigger_from_path(args.input_dir, train_ds, args.img_size)
@@ -311,15 +300,17 @@ def main():
 
 	#ckpt_path = os.path.join(args.input_dir, "teacher", "{}-{}.pt".format(args.dataset, args.model))
 	teacher = models.get_model(args)
-	teacher2 = models.get_model(args)
+
+	# torch.save(teacher.state_dict(), 'model.pt')
+	# exit()
 	student = models.get_model(args)
 	generator = gan.GeneratorB(nz=args.nz, nc=args.img_channels, img_size=args.img_size)
 
 	pert_generator = gan.PatchGeneratorPreBN(nz=args.nz2, nc=args.img_channels, patch_size=args.patch_size, out_size=args.img_size)
 	
-	ckpt_path = f'{args.input_dir}/teacher/{args.dataset}-{args.model}.pt'
+	# ckpt_path = f'logs/{args.input_dir}/teacher/{args.dataset}-{args.model}.pt'
+	ckpt_path = 'model.pt'
 
-	teacher2.load_state_dict(torch.load(ckpt_path))
 	# print("Teacher2 restored from %s"%(ckpt_path))
 	
 	# teacher.load_state_dict(torch.load('/home/bei_chen/DHBE-main/train_teacher_badnets_cifar10_resnet18_e_200_tri1_3x3_t9_0_0_n300_results/teacher/cifar10-resnet18.pt'))
@@ -331,7 +322,6 @@ def main():
 	print("Student restored from %s"%(ckpt_path))
 
 	teacher = teacher.cuda()
-	teacher2 = teacher2.cuda()
 	student = student.cuda()
 	student_am = models.get_am_model_from_base(student)
 	student_am = student_am.cuda()
@@ -340,7 +330,6 @@ def main():
 	pert_generator = pert_generator.cuda()
 
 	teacher.eval()
-	teacher2.eval()
 
 	optimizer_S = optim.SGD( student_am.parameters(), lr=args.lr_S, weight_decay=args.weight_decay, momentum=0.9)
 	optimizer_G = optim.Adam( generator.parameters(), lr=args.lr_G )
@@ -382,7 +371,7 @@ def main():
 			plotter.scalar("test_acc", 0, acc)
 			plotter.scalar("test_asr", 0, asr)
 
-		train(args, teacher=teacher, teacher2 = teacher2, student=student_am, generator=generator, 
+		train(args, teacher=teacher,student=student_am, generator=generator, 
 					pert_generator=pert_generator,
 					norm_trans=norm_trans, norm_trans_inv=norm_trans_inv,
 					optimizer=[optimizer_S, optimizer_G, 

@@ -193,7 +193,7 @@ class PatternSynthesizer(Synthesizer):
         self.make_pattern(self.pattern_tensor[trigger_name], self.x_top, self.y_top)
 
     def make_pattern(self, pattern_tensor, x_top, y_top):
-        input_shape = [3, 32, 32]
+        input_shape = [1, 28, 28]
         full_image = torch.zeros(input_shape)
         full_image.fill_(self.mask_value)
 
@@ -209,8 +209,9 @@ class PatternSynthesizer(Synthesizer):
         full_image[:, x_top:x_bot, y_top:y_bot] = pattern_tensor
 
         self.mask = 1 * (full_image != self.mask_value).cuda()
-        normalize = transforms.Normalize((0.4914, 0.4822, 0.4465),
-                                     (0.2023, 0.1994, 0.2010))
+        # normalize = transforms.Normalize((0.4914, 0.4822, 0.4465),
+        #                              (0.2023, 0.1994, 0.2010))
+        normalize = transforms.Normalize((0.1307,), (0.3081,))
         self.pattern = normalize(full_image).cuda()
 
     def synthesize_inputs(self, batch, attack_portion=None):
