@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 import gan
-import models
+import model
 from dataloader import get_dataset, get_norm_trans, get_norm_trans_inv
 import my_utils as utils
 
@@ -253,8 +253,8 @@ def main():
 		poisoned_test_ds = tester.get_backdoored_test_dataset()
 
 	#ckpt_path = os.path.join(args.input_dir, "teacher", "{}-{}.pt".format(args.dataset, args.model))
-	teacher = models.get_model(args)
-	student = models.get_model(args)
+	teacher = model.get_model(args)
+	student = model.get_model(args)
 	pert_generator = gan.PatchGeneratorPreBN(nz=args.nz2, nc=args.img_channels, patch_size=args.patch_size, out_size=args.img_size)
 	
 	ckpt_path = f'logs/{args.input_dir}/teacher/cifar10-resnet18.pt'

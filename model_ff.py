@@ -136,7 +136,7 @@ class ResNet(nn.Module):
         self._norm_layer = norm_layer
 
         # num of input channels
-        self.inplanes = 64
+        self.inplanes = 32
         self.dilation = 1
         if replace_stride_with_dilation is None:
             # each element in the tuple indicates if we should replace
@@ -147,16 +147,16 @@ class ResNet(nn.Module):
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = norm_layer(self.inplanes)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU()
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
+        self.layer1 = self._make_layer(block, 32, layers[0])
+        self.layer2 = self._make_layer(block, 64, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
+        self.layer3 = self._make_layer(block, 128, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
+        self.layer4 = self._make_layer(block, 256, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
+        self.linear = nn.Linear(256 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -176,6 +176,9 @@ class ResNet(nn.Module):
                     nn.init.constant_(m.bn3.weight, 0)
                 elif isinstance(m, BasicBlock):
                     nn.init.constant_(m.bn2.weight, 0)
+                    
+    def activations_hook(self, grad):
+        self.gradient = grad
 
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
         norm_layer = self._norm_layer
@@ -202,9 +205,6 @@ class ResNet(nn.Module):
                                 norm_layer=norm_layer))
 
         return nn.Sequential(*layers)
-    
-    def activations_hook(self, grad):
-        self.gradient = grad
 
     def features(self, x):
         out1 = self.maxpool(self.relu(self.bn1(self.conv1(x))))
@@ -234,13 +234,18 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
+
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         layer4_out = self.layer4(x)
+
+        if layer4_out.requires_grad:
+            layer4_out.register_hook(self.activations_hook)
+
         x = self.avgpool(layer4_out)
         flatten_x = torch.flatten(x, 1)
-        x = self.fc(flatten_x)
+        x = self.linear(flatten_x)
         if latent:
             return x, flatten_x
         else:
@@ -274,7 +279,7 @@ class Resnet_AM(ResNet):
 		am4 = self.attention_map(x_4)
 		out = self.f.avgpool(x_4)
 		out = out.view(out.size(0), -1)
-		out = self.f.fc(out)
+		out = self.f.linear(out)
 		return am1, am2, am3, am4, out
 	
 

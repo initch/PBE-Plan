@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 import gan
-import models_ff as models
+import model_ff as model
 from dataloader import get_dataset, get_norm_trans, get_norm_trans_inv
 import my_utils as utils
 
@@ -212,10 +212,10 @@ def main():
 	parser = argparse.ArgumentParser(description='DHBE CIFAR')
 	parser.add_argument('--batch_size', type=int, default=256, metavar='N', help='input batch size for training (default: 256)')
 	parser.add_argument('--test_batch_size', type=int, default=128, metavar='N', help='input batch size for testing (default: 128)')
-	parser.add_argument('--epochs', type=int, default=2000, metavar='N', help='number of epochs to train (default: 500)')
-	parser.add_argument('--epoch_iters', type=int, default=5)
+	parser.add_argument('--epochs', type=int, default=200, metavar='N', help='number of epochs to train (default: 500)')
+	parser.add_argument('--epoch_iters', type=int, default=50)
 
-	parser.add_argument('--lr_S', type=float, default=0.01, metavar='LR', help='learning rate (default: 0.1)')
+	parser.add_argument('--lr_S', type=float, default=0.1, metavar='LR', help='learning rate (default: 0.1)')
 	parser.add_argument('--lr_G', type=float, default=0.001, help='learning rate (default: 0.1)')
 	parser.add_argument('--lr_decay', type=float, default=0.1)
 	parser.add_argument('--weight_decay', type=float, default=5e-4)
@@ -311,30 +311,34 @@ def main():
 		poisoned_test_ds = tester.get_backdoored_test_dataset()
 
 	#ckpt_path = os.path.join(args.input_dir, "teacher", "{}-{}.pt".format(args.dataset, args.model))
-	teacher = models.get_model(args)
-	teacher2 = models.get_model(args)
-	student = models.get_model(args)
+	teacher = model.get_model(args)
+	teacher2 = model.get_model(args)
+	student = model.get_model(args)
 	generator = gan.GeneratorB(nz=args.nz, nc=args.img_channels, img_size=args.img_size)
 
 	pert_generator = gan.PatchGeneratorPreBN(nz=args.nz2, nc=args.img_channels, patch_size=args.patch_size, out_size=args.img_size)
 	
 	ckpt_path = f'logs/{args.input_dir}/teacher/{args.dataset}-{args.model}.pt'
+	resume_state_dict = torch.load(ckpt_path)
+	for key in resume_state_dict:
+		if 'relu' in key:
+			resume_state_dict.remove(key)
 
-	teacher2.load_state_dict(torch.load(ckpt_path))
+	teacher2.load_state_dict(resume_state_dict)
 	# print("Teacher2 restored from %s"%(ckpt_path))
 	
 	# teacher.load_state_dict(torch.load('/home/bei_chen/DHBE-main/train_teacher_badnets_cifar10_resnet18_e_200_tri1_3x3_t9_0_0_n300_results/teacher/cifar10-resnet18.pt'))
-	teacher.load_state_dict(torch.load(ckpt_path))
+	teacher.load_state_dict(resume_state_dict)
 	print("Teacher restored from %s"%(ckpt_path))
 
 	# student.load_state_dict(torch.load('/home/bei_chen/DHBE-main/train_teacher_badnets_cifar10_resnet18_e_200_tri1_3x3_t9_0_0_n300_results/teacher/cifar10-resnet18.pt'))
-	student.load_state_dict(torch.load(ckpt_path))
+	student.load_state_dict(resume_state_dict)
 	print("Student restored from %s"%(ckpt_path))
 
 	teacher = teacher.cuda()
 	teacher2 = teacher2.cuda()
 	student = student.cuda()
-	student_am = models.get_am_model_from_base(student)
+	student_am = model.get_am_model_from_base(student)
 	student_am = student_am.cuda()
 
 	generator = generator.cuda()
@@ -402,7 +406,7 @@ def main():
 			utils.test_generators(args, {'pert':pert_generator}, args.nz2, epoch, output_dir, plotter, norm_trans_inv=lambda x:(x+1.0)/2.0)
 		
 		if epoch <= 50 or epoch % 20 == 0:
-			student = models.get_base_model_from_am(student_am)
+			student = model.get_base_model_from_am(student_am)
 			if args.backdoor_method == 'Badnets':
 				acc, asr = utils.test_model_acc_and_asr(args, student, poisoned_test_ds)
 			elif args.backdoor_method in ['edge-case', 'semantic']:

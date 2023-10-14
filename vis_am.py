@@ -10,7 +10,7 @@ import copy
 
 import os
 import argparse
-import models
+import model
 import dataloader
 import my_utils as utils
 import vis
@@ -64,9 +64,9 @@ test_loader = DataLoader(test_ds, batch_size=1)
 
 
 # load teacher, student and poisoned parameters
-teacher = models.get_model()
+teacher = model.get_model()
 teacher.to(dev)
-student = models.get_model()
+student = model.get_model()
 student.to(dev)
 
 model_path = '/home/bei_chen/DHBE-main/train_teacher_badnets_cifar10_resnet18_e_200_tri1_3x3_t9_0_0_n0_results/teacher/cifar10-resnet18.pt'
@@ -75,7 +75,7 @@ model = torch.load(model_path)
 teacher.load_state_dict(model)
 student.load_state_dict(model)
 
-student_am = models.get_am_model_from_base(student)
+student_am = model.get_am_model_from_base(student)
 student_am.to(dev)
 
 upsample2 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)

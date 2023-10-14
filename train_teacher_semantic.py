@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 
 from tqdm import tqdm
 
-import models
+import model
 from dataloader import get_dataset
 from torchvision import transforms
 
@@ -120,7 +120,7 @@ def main():
 
 	# test_ds = utils.get_backdoored_test_ds(args, test_ds)
 	
-	model = models.get_model(args)
+	model = model.get_model(args)
 	model = model.cuda()
 
 	steps = [0.5, 0.8, 0.9]

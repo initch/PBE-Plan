@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 
 from tqdm import tqdm
 
-import models
+import model
 from dataloader import get_dataset
 
 import vis
@@ -72,10 +72,6 @@ def main():
 					'DBA_1x4_bg': [[0,0], [0,31], [28,0], [28,31]]
 					}.get(args.trigger_name)
 	
-	# if args.target_class == -1:
-	# 	target_class = args.num_classes-1
-	# else:
-	# 	target_class = args.target_class
 
 	num_poison_images = args.num_poison_images
 	trigger_name = "{}_t{}_{}_{}".format(args.trigger_name, args.target_class, args.trigger_offset, args.trigger_offset)
@@ -107,7 +103,7 @@ def main():
 
 	test_ds = utils.get_backdoored_test_ds(args, test_ds)
 
-	model = models.get_model(args)
+	model = model.get_model(args)
 	model = model.cuda()
 
 	# steps = [0.5, 0.8, 0.9]

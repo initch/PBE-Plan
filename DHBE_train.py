@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 import gan
-import models
+import model
 from dataloader import get_dataset, get_norm_trans, get_norm_trans_inv
 import my_utils as utils
 
@@ -80,15 +80,7 @@ def train(args, teacher,
 		# loss_tvl1 = utils.get_image_prior_losses_l1(fake_data)
 		loss_tvl2 = utils.get_image_prior_losses_l2(fake_data)
 
-		# Anti-Backdoor Data-free Distillation (ABD)
-		# if args.loss_weight_suspect > 0:
-		# 	suspect_loss = BackdoorSuspectLoss(teacher)
-		# 	suspect_loss.prepare_select_shuffle()
-		# 	loss_suspect = suspect_loss.loss(t_logit, fake_data)
-		# else:
-		# 	loss_suspect = 0
-
-		loss_G = loss_G1 + args.loss_weight_tvl2 * loss_tvl2 + args.loss_weight_real * loss_real
+		loss_G = loss_G1 + args.loss_weight_tvl2 * loss_tvl2 #+ args.loss_weight_real * loss_real
 		loss_G.backward()
 		optimizer_G.step()
 
@@ -130,8 +122,8 @@ def train(args, teacher,
 		loss_am4 = - F.mse_loss(am4.detach(), am8)
 		loss_adv_ama =  loss_am1 * 500 + loss_am2 * 500 + loss_am3 * 500 + loss_am4 * 1000
 
-		loss_mislead = - F.smooth_l1_loss(s_logit.detach(), s_logit_pert)
-		loss_consistency = F.smooth_l1_loss(s_logit_pert3, s_logit_pert)
+		loss_mislead = - F.l1_loss(s_logit.detach(), s_logit_pert)
+		loss_consistency = F.l1_loss(s_logit_pert3, s_logit_pert)
 		# loss_teacher = - F.smooth_l1_loss(t_logit.detach(), t_logit_pert) + 0.1 * F.cross_entropy(t_logit_pert3, t_logit_pert.data.max(1)[1])
 
 		loss_Gp = loss_mislead  + args.loss_weight_consistency * loss_consistency + args.loss_weight_adv_ama * loss_adv_ama
@@ -168,9 +160,9 @@ def train(args, teacher,
 			loss_ama =  loss_am1 * 500 + loss_am2 * 500 + loss_am3 * 500 + loss_am4 * 1000
 			
 
-			#loss_S1 = F.l1_loss(s_logit, t_logit.detach()) #KD蒸馏
-			loss_S1 = F.smooth_l1_loss(s_logit, t_logit.detach())
-			loss_S2 = F.smooth_l1_loss(s_logit_pert, s_logit.detach()) #+ F.smooth_l1_loss(fake_data, patched_data)
+			loss_S1 = F.l1_loss(s_logit, t_logit.detach()) #KD蒸馏
+			# loss_S1 = F.smooth_l1_loss(s_logit, t_logit.detach())
+			loss_S2 = F.l1_loss(s_logit_pert, s_logit.detach()) #+ F.smooth_l1_loss(fake_data, patched_data)
 			
 			#+ 0.1 * F.l1_loss(s_logit_pert, t2_logit.detach())
 
@@ -200,10 +192,10 @@ def train(args, teacher,
 def main():
 	# Training settings
 	parser = argparse.ArgumentParser(description='DHBE CIFAR')
-	parser.add_argument('--batch_size', type=int, default=256, metavar='N', help='input batch size for training (default: 256)')
+	parser.add_argument('--batch_size', type=int, default=64, metavar='N', help='input batch size for training (default: 256)')
 	parser.add_argument('--test_batch_size', type=int, default=128, metavar='N', help='input batch size for testing (default: 128)')
-	parser.add_argument('--epochs', type=int, default=2000, metavar='N', help='number of epochs to train (default: 500)')
-	parser.add_argument('--epoch_iters', type=int, default=5)
+	parser.add_argument('--epochs', type=int, default=100, metavar='N', help='number of epochs to train (default: 500)')
+	parser.add_argument('--epoch_iters', type=int, default=50)
 
 	parser.add_argument('--lr_S', type=float, default=0.1, metavar='LR', help='learning rate (default: 0.1)')
 	parser.add_argument('--lr_G', type=float, default=0.001, help='learning rate (default: 0.1)')
@@ -258,7 +250,7 @@ def main():
 	os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 	print(args)
 
-	param_string = "e_{}_ps_{}_wama_{}_wd1_{}_wtvl2_{}_wreal_{}_wadv_{}_wcon_{}_lrs_{}_lrg_{}_lrgp_{}"
+	param_string = "test_e_{}_ps_{}_wama_{}_wd1_{}_wtvl2_{}_wreal_{}_wadv_{}_wcon_{}_lrs_{}_lrg_{}_lrgp_{}"
 	param_string = param_string.format(args.epochs, args.patch_size, args.loss_weight_ama, args.loss_weight_d1, args.loss_weight_tvl2, args.loss_weight_real, args.loss_weight_adv_ama, args.loss_weight_consistency, args.lr_S, args.lr_G, args.lr_Gp)
 
 	output_dir = os.path.join('logs/'+args.input_dir, __file__.split('.')[0] + "_{}_results".format(param_string))
@@ -278,8 +270,7 @@ def main():
 	norm_trans = get_norm_trans(args)
 	norm_trans_inv = get_norm_trans_inv(args)
 	train_ds, test_ds = get_dataset(args)
-	# args.model = utils.infer_model_from_path(args.input_dir)
-	args.model = 'lenet5'
+	args.model = utils.infer_model_from_path(args.input_dir)
 
 	if args.backdoor_method == 'Badnets':
 		trigger, target_class = utils.infer_trigger_from_path(args.input_dir, train_ds, args.img_size)
@@ -298,18 +289,17 @@ def main():
 			tester = WallTest(train_ds, args.target_class)
 		poisoned_test_ds = tester.get_backdoored_test_dataset()
 
-	#ckpt_path = os.path.join(args.input_dir, "teacher", "{}-{}.pt".format(args.dataset, args.model))
-	teacher = models.get_model(args)
+	# ckpt_path = os.path.join(args.input_dir, "teacher", "{}-{}.pt".format(args.dataset, args.model))
+	teacher = model.get_model(args)
 
 	# torch.save(teacher.state_dict(), 'model.pt')
 	# exit()
-	student = models.get_model(args)
+	student = model.get_model(args)
 	generator = gan.GeneratorB(nz=args.nz, nc=args.img_channels, img_size=args.img_size)
 
 	pert_generator = gan.PatchGeneratorPreBN(nz=args.nz2, nc=args.img_channels, patch_size=args.patch_size, out_size=args.img_size)
 	
-	# ckpt_path = f'logs/{args.input_dir}/teacher/{args.dataset}-{args.model}.pt'
-	ckpt_path = 'model.pt'
+	ckpt_path = f'logs/{args.input_dir}/teacher/{args.dataset}-{args.model}.pt'
 
 	# print("Teacher2 restored from %s"%(ckpt_path))
 	
@@ -318,12 +308,12 @@ def main():
 	print("Teacher restored from %s"%(ckpt_path))
 
 	# student.load_state_dict(torch.load('/home/bei_chen/DHBE-main/train_teacher_badnets_cifar10_resnet18_e_200_tri1_3x3_t9_0_0_n300_results/teacher/cifar10-resnet18.pt'))
-	student.load_state_dict(torch.load(ckpt_path))
+	# student.load_state_dict(torch.load(ckpt_path))
 	print("Student restored from %s"%(ckpt_path))
 
 	teacher = teacher.cuda()
 	student = student.cuda()
-	student_am = models.get_am_model_from_base(student)
+	student_am = model.get_am_model_from_base(student)
 	student_am = student_am.cuda()
 
 	generator = generator.cuda()
@@ -335,8 +325,8 @@ def main():
 	optimizer_G = optim.Adam( generator.parameters(), lr=args.lr_G )
 	optimizer_Gp = optim.Adam( pert_generator.parameters(), lr=args.lr_Gp )
 
-	# lr_decay_steps = [0.2, 0.5, 0.8]
-	# lr_decay_steps = [int(e * args.epochs) for e in lr_decay_steps]
+	lr_decay_steps = [0.4, 0.8]
+	lr_decay_steps = [int(e * args.epochs) for e in lr_decay_steps]
 	
 	# lr_decay_steps_list = [
 	# 	[400, 1200, 1600], # adjusting learning rate 0: 1111 epoch 2000
@@ -348,7 +338,6 @@ def main():
 	# 	[1800, 2400]
 	# ]
 	# lr_decay_steps = lr_decay_steps_list[args.adjlr]
-	lr_decay_steps = [400, 1000, 1600]
 
 	scheduler_S = optim.lr_scheduler.MultiStepLR(optimizer_S, lr_decay_steps, args.lr_decay)
 	scheduler_G = optim.lr_scheduler.MultiStepLR(optimizer_G, lr_decay_steps, args.lr_decay)
@@ -390,7 +379,7 @@ def main():
 			utils.test_generators(args, {'pert':pert_generator}, args.nz2, epoch, output_dir, plotter, norm_trans_inv=lambda x:(x+1.0)/2.0)
 		
 		if epoch <= 50 or epoch % 20 == 0:
-			student = models.get_base_model_from_am(student_am)
+			student = model.get_base_model_from_am(student_am)
 			if args.backdoor_method == 'Badnets':
 				acc, asr = utils.test_model_acc_and_asr(args, student, poisoned_test_ds)
 			elif args.backdoor_method in ['edge-case', 'semantic']:

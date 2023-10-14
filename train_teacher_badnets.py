@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 
 from tqdm import tqdm
 
-import models
+import model
 from dataloader import get_dataset
 
 import vis
@@ -101,7 +101,7 @@ def main():
 	test_ds = TriggerPastedTestDataset(test_ds, trigger, target_class=target_class)
 	train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=4, drop_last=True)
 
-	model = models.get_model(args)
+	model = model.get_model(args)
 	model = model.cuda()
 
 	steps = [0.5, 0.8, 0.9]

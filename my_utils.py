@@ -284,9 +284,10 @@ def infer_trigger_from_path(input_path, train_ds, img_size):
 
 
 def infer_model_from_path(input_path):
-	for model in ["_resnet18_", "_resnet34_", "_resnet50_", "_cnn13_", "_wrn161_", "_wrn162_", "_wrn401_", "_wrn402_"]:
+	for model in ["_lenet5_", "_resnet18_", "_resnet34_", "_resnet50_", "_cnn13_", "_wrn161_", "_wrn162_", "_wrn401_", "_wrn402_"]:
 		if model in input_path:
 			return model[1:-1]
+	raise ValueError("Not found model from input path")
 
 
 
