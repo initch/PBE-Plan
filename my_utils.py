@@ -319,7 +319,7 @@ def test_generators(args, generators, nz, epoch, output_dir, plotter=None, epoch
 
 	def default_epoch_chooser(e):
 		# return epoch < 20 or epoch % 10 == 0
-		return epoch < 20 or epoch % 100 == 0
+		return epoch < 20 or epoch % 10 == 0
 	if epoch_chooser is None:
 		epoch_chooser = default_epoch_chooser
 

@@ -167,6 +167,11 @@ class PatternSynthesizer(Synthesizer):
             [-10.,-10,-10.,-10,-10,-10,-10,-10,-10,-10,-10,-10,-10,-10,-10,-10,-10,-10,-10,-10,-10,-10,1., 0., 1., 0.,-10,-10, 1., 0., 1., 0.]
 	    ]),
         'tri4_3x3': torch.tensor([
+            [0.2, 0.4, 0.2],
+            [0.4, 0.2, 0.4],
+            [0.2, 0.4, 0.2],
+        ]),
+        'white_3x3': torch.tensor([
             [1., 1., 1.],
             [1., 1., 1.],
             [1., 1., 1.],
@@ -199,9 +204,9 @@ class PatternSynthesizer(Synthesizer):
         self.make_pattern(self.pattern_tensor[trigger_name], self.x_top, self.y_top)
 
     def make_pattern(self, pattern_tensor, x_top, y_top):
-        input_shape = [1, 28, 28]
+        # input_shape = [1, 28, 28]
         # input_shape = [3, 32, 32]
-        # input_shape = [3, 64, 64]
+        input_shape = [3, 64, 64]
         full_image = torch.zeros(input_shape)
         full_image.fill_(self.mask_value)
 
@@ -218,8 +223,8 @@ class PatternSynthesizer(Synthesizer):
 
         self.mask = 1 * (full_image != self.mask_value).cuda()
         # normalize = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-        normalize = transforms.Normalize((0.1307,), (0.3081,))
-        # normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        # normalize = transforms.Normalize((0.1307,), (0.3081,))
+        normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         self.pattern = normalize(full_image).cuda()
 
     def synthesize_inputs(self, batch, attack_portion=None):
@@ -227,6 +232,7 @@ class PatternSynthesizer(Synthesizer):
         batch[:attack_portion] = (1 - mask) * \
                                         batch[:attack_portion] + \
                                         mask * pattern
+        # save_image(batch[0], 'test_poison_image.png')
 
         return
 

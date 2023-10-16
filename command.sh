@@ -1,3 +1,8 @@
+# MNIST
+python DHBE_train.py --input_dir howto_mnist_lenet5_tri4_3x3_t0_scale3 --dataset mnist --lr_S 0.01 --lr_G 0.0001 --loss_Weight_tvl2 0 --epochs 100 --trigger_name tri4_3x3
+
+
+
 # CIFAR 10
 # Badnets tri1_3x3
 
@@ -70,3 +75,7 @@ python DHBE_train.py --dataset cifar100 --input_dir DBA_cifar100_resnet18_tri2_1
 python DHBE_train.py --dataset cifar100 --input_dir neurotoxin_cifar100_resnet18_tri1_2x2_t0 --backdoor_method neurotoxin --trigger_name tri1_2x2
 python DHBE_train.py --dataset cifar100 --input_dir neurotoxin_cifar100_resnet18_tri1_3x3_t0 --backdoor_method neurotoxin --trigger_name tri1_3x3
 python DHBE_train.py --dataset cifar100 --input_dir neurotoxin_cifar100_resnet18_tri1_5x5_t0 --backdoor_method neurotoxin --trigger_name tri1_5x5
+
+
+# Tiny-ImageNet
+python DHBE_train.py --dataset tiny-imagenet --input_dir howto_tinyimagenet_resnet18_tri1_3x3_t0

@@ -6,6 +6,8 @@ import pickle as pkl
 import numpy as np
 import cv2
 
+import logging
+
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
@@ -18,6 +20,7 @@ import my_utils as utils
 from backdoor.base import SimpleSubset, TriggerPastedTestDataset, MultiTriggerPastedTestDataset
 
 import vis
+from vis import TbWriter, create_logger
 
 import copy
 
@@ -25,10 +28,12 @@ from test.semantic import GreenCarTest, RacingStripeTest, WallTest
 from test.edge_case import EdgeCaseTest
 
 
+logger = create_logger()
+
 def train(args, teacher,
 	student, generator, pert_generator,
 	norm_trans, norm_trans_inv, 
-	optimizer, epoch, plotter=None, 
+	optimizer, epoch, plotter=None, tb_writer=None, 
 	):
 	teacher.eval()
 	student.train()
@@ -133,7 +138,7 @@ def train(args, teacher,
 		optimizer_Gp.step()
 
 		# ------- Step 3 - update student
-		for k in range(5):
+		for k in range(100):
 			z = torch.randn((args.batch_size, args.nz)).cuda()
 			z2 = torch.randn((args.batch_size, args.nz2)).cuda()
 
@@ -172,9 +177,22 @@ def train(args, teacher,
 			optimizer_S.step()
 
 		if i % args.log_interval == 0:
-			print('Train Epoch: {} [{}/{} ({:.0f}%)]\tG_Loss: {:.6f} S_loss: {:.6f}'.format(
+			logger.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tG_Loss: {:.6f} S_loss: {:.6f}'.format(
 				epoch, i, args.epoch_iters, 100*float(i)/float(args.epoch_iters), loss_G.item(), loss_S.item()))
 
+			if tb_writer is not None:
+				tb_writer.plot('Train/Loss_S', (epoch-1)*args.epoch_iters+i, loss_S.item())
+				tb_writer.plot('Train/Loss_S1', (epoch-1)*args.epoch_iters+i, loss_S1.item())
+				tb_writer.plot('Train/Loss_S2', (epoch-1)*args.epoch_iters+i, loss_S2.item())
+				tb_writer.plot('Train/Loss_S_AMA', (epoch-1)*args.epoch_iters+i, loss_ama.item())
+				tb_writer.plot('Train/Loss_G', (epoch-1)*args.epoch_iters+i, loss_G.item())
+				tb_writer.plot('Train/Loss_G_l1', (epoch-1)*args.epoch_iters+i, loss_G1.item())
+				tb_writer.plot('Train/Loss_G_tvl2', (epoch-1)*args.epoch_iters+i, loss_tvl2.item())
+				tb_writer.plot('Train/Loss_G_real', (epoch-1)*args.epoch_iters+i, loss_real.item())
+				tb_writer.plot('Train/Loss_Gp', (epoch-1)*args.epoch_iters+i, loss_Gp.item())
+				tb_writer.plot('Train/Loss_Gp_mislead', (epoch-1)*args.epoch_iters+i, loss_mislead.item())
+				tb_writer.plot('Train/Loss_Gp_consistency', (epoch-1)*args.epoch_iters+i, loss_consistency.item())
+				tb_writer.plot('Train/Loss_Gp_AMA', (epoch-1)*args.epoch_iters+i, loss_adv_ama.item())
 			if plotter is not None:
 				plotter.scalar('Loss_S', (epoch-1)*args.epoch_iters+i, loss_S.item())
 				plotter.scalar('Loss_S1', (epoch-1)*args.epoch_iters+i, loss_S1.item())
@@ -188,13 +206,14 @@ def train(args, teacher,
 				plotter.scalar('Loss_Gp_mislead', (epoch-1)*args.epoch_iters+i, loss_mislead.item())
 				plotter.scalar('Loss_Gp_consistency', (epoch-1)*args.epoch_iters+i, loss_consistency.item())
 				plotter.scalar('Loss_Gp_AMA', (epoch-1)*args.epoch_iters+i, loss_adv_ama.item())
+			
 
 def main():
 	# Training settings
 	parser = argparse.ArgumentParser(description='DHBE CIFAR')
 	parser.add_argument('--batch_size', type=int, default=64, metavar='N', help='input batch size for training (default: 256)')
 	parser.add_argument('--test_batch_size', type=int, default=128, metavar='N', help='input batch size for testing (default: 128)')
-	parser.add_argument('--epochs', type=int, default=100, metavar='N', help='number of epochs to train (default: 500)')
+	parser.add_argument('--epochs', type=int, default=200, metavar='N', help='number of epochs to train (default: 500)')
 	parser.add_argument('--epoch_iters', type=int, default=50)
 
 	parser.add_argument('--lr_S', type=float, default=0.1, metavar='LR', help='learning rate (default: 0.1)')
@@ -217,6 +236,7 @@ def main():
 	parser.add_argument('--loss_weight_adv_ama', type=float, default=0)
 	parser.add_argument('-ps', '--patch_size', type=int, default=5)
 	parser.add_argument('--nz2', type=int, default=256)
+	parser.add_argument('--layerwise_ratio', type=float, nargs='+')
 
 	parser.add_argument('--backdoor_method', type=str, default='howto')
 	# for Badnets
@@ -227,17 +247,13 @@ def main():
 
 	parser.add_argument('--vis_generator', action='store_true', default=True)
 	parser.add_argument('--adjlr',type=int, default=0)
+	parser.add_argument('--note',type=str, default='')
 	
 	args = parser.parse_args()
 	args.num_classes = {"cifar10":10, "cifar100":100, "mnist":10, "vggface2_subset":100, "svhn":10, "mini-imagenet":100, "tiny-imagenet":200}.get(args.dataset, 10)
 	args.img_size = {"cifar10":32, "cifar100":32, "mnist":28, "vggface2_subset":64, "svhn":32, "mini-imagenet":64, "tiny-imagenet":64}.get(args.dataset, 32)
 	args.img_channels = {"cifar10":3, "cifar100":3, "mnist":1, "vggface2_subset":3, "svhn":3, "mini-imagenet":3, "tiny-imagenet":3}.get(args.dataset, 3)
 	
-	# if args.backdoor_method == 'DBA':
-	# 	args.multi_trigger_offset = {'DBA_1x4': [[0,0], [0,3], [5,0], [5,3]],
-	# 		        'DBA_2x4': [[0,0], [0,4], [6,0], [6,4]],
-	# 				'DBA_1x4_bg': [[0,0], [0,31], [28,0], [28,31]]
-	# 				}.get(args.trigger_name)
 	
 	torch.manual_seed(args.seed)
 	torch.cuda.manual_seed(args.seed)
@@ -246,12 +262,17 @@ def main():
 	torch.backends.cudnn.deterministic = True
 	torch.backends.cudnn.benchmark = False
 	# torch.backends.cudnn.enabled = False
+
 	
 	os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 	print(args)
 
-	param_string = "test_e_{}_ps_{}_wama_{}_wd1_{}_wtvl2_{}_wreal_{}_wadv_{}_wcon_{}_lrs_{}_lrg_{}_lrgp_{}"
-	param_string = param_string.format(args.epochs, args.patch_size, args.loss_weight_ama, args.loss_weight_d1, args.loss_weight_tvl2, args.loss_weight_real, args.loss_weight_adv_ama, args.loss_weight_consistency, args.lr_S, args.lr_G, args.lr_Gp)
+	if args.note == '':
+		param_string = "e_{}_ps_{}_wama_{}_wd1_{}_wtvl2_{}_wreal_{}_wadv_{}_wcon_{}_lrs_{}_lrg_{}_lrgp_{}"
+		param_string = param_string.format(args.epochs, args.patch_size, args.loss_weight_ama, args.loss_weight_d1, args.loss_weight_tvl2, args.loss_weight_real, args.loss_weight_adv_ama, args.loss_weight_consistency, args.lr_S, args.lr_G, args.lr_Gp)
+	else:
+		param_string = "{}_e_{}_ps_{}_wama_{}_wd1_{}_wtvl2_{}_wreal_{}_wadv_{}_wcon_{}_lrs_{}_lrg_{}_lrgp_{}"
+		param_string = param_string.format(args.note, args.epochs, args.patch_size, args.loss_weight_ama, args.loss_weight_d1, args.loss_weight_tvl2, args.loss_weight_real, args.loss_weight_adv_ama, args.loss_weight_consistency, args.lr_S, args.lr_G, args.lr_Gp)
 
 	output_dir = os.path.join('logs/'+args.input_dir, __file__.split('.')[0] + "_{}_results".format(param_string))
 
@@ -266,6 +287,7 @@ def main():
 	#	os.makedirs(os.path.join(output_dir, "sensitivity"), exist_ok=True)
 	#if args.save_checkpoint:
 	#	os.makedirs(os.path.join(output_dir, "train_stats"), exist_ok=True)
+	
 
 	norm_trans = get_norm_trans(args)
 	norm_trans_inv = get_norm_trans_inv(args)
@@ -300,16 +322,50 @@ def main():
 	pert_generator = gan.PatchGeneratorPreBN(nz=args.nz2, nc=args.img_channels, patch_size=args.patch_size, out_size=args.img_size)
 	
 	ckpt_path = f'logs/{args.input_dir}/teacher/{args.dataset}-{args.model}.pt'
-
-	# print("Teacher2 restored from %s"%(ckpt_path))
 	
 	# teacher.load_state_dict(torch.load('/home/bei_chen/DHBE-main/train_teacher_badnets_cifar10_resnet18_e_200_tri1_3x3_t9_0_0_n300_results/teacher/cifar10-resnet18.pt'))
 	teacher.load_state_dict(torch.load(ckpt_path))
-	print("Teacher restored from %s"%(ckpt_path))
+	logger.info("Teacher restored from %s"%(ckpt_path))
 
-	# student.load_state_dict(torch.load('/home/bei_chen/DHBE-main/train_teacher_badnets_cifar10_resnet18_e_200_tri1_3x3_t9_0_0_n300_results/teacher/cifar10-resnet18.pt'))
 	# student.load_state_dict(torch.load(ckpt_path))
-	print("Student restored from %s"%(ckpt_path))
+	# print("Student restored from %s"%(ckpt_path))
+
+	# old_state = torch.load(ckpt_path, map_location='cpu')
+	# new_state = student.cpu().state_dict()
+	# # BCU: random initialization
+	# for key in old_state.keys():
+	# 	if key.find('bn') != -1 or key.find('shortcut.1') != -1:
+	# 		continue
+	# 	if key.endswith('.weight') or key.endswith('.bias'):
+	# 		p = args.layerwise_ratio[0]
+	# 		if key.startswith('layer1'):
+	# 			p = args.layerwise_ratio[1]
+	# 		elif key.startswith('layer2'):
+	# 			p = args.layerwise_ratio[2]
+	# 		elif key.startswith('layer3'):
+	# 			p = args.layerwise_ratio[3]
+	# 		elif key.startswith('layer4'):
+	# 			p = args.layerwise_ratio[4]
+	# 		elif key.startswith('linear'):
+	# 			p = args.layerwise_ratio[5]
+
+	# 		# if key.startswith('fc'):
+	# 		#     p = 1
+	# 		# elif key.find('shortcut') != -1:
+	# 		#     p = 1
+	# 		#     # p = 1 - (num_layers - 3) * 0.01
+	# 		#     print(key, p)
+	# 		# else:
+	# 		#     p = num_layers * 0.01
+	# 		#     print(key, p)
+	# 		#     num_layers += 1
+	# 		mask_one = torch.ones(old_state[key].shape) * (1 - p)
+	# 		mask = torch.bernoulli(mask_one)
+	# 		# masked_weight = old_state[key] * mask * (1/(1-p)) + new_state[key] * (1 - mask)
+	# 		masked_weight = old_state[key] * mask + new_state[key] * (1 - mask)     # 1 copy, 0 random
+	# 		old_state[key] = masked_weight
+	
+	# student.load_state_dict(old_state,strict=False)
 
 	teacher = teacher.cuda()
 	student = student.cuda()
@@ -344,7 +400,8 @@ def main():
 	scheduler_Gp = optim.lr_scheduler.MultiStepLR(optimizer_Gp, lr_decay_steps, args.lr_decay)
 
 	plotter = vis.Plotter()
-
+	tb_writer = TbWriter(f'runs/{args.input_dir}_DHBE_{param_string}')
+	tb_writer.save_params_to_table(vars(args))
 
 	for epoch in range(1, args.epochs + 1):
 		# Train
@@ -356,16 +413,18 @@ def main():
 				asr = utils.test_model_asr(args, student, poisoned_test_ds, args.target_class)
 			else:
 				acc, asr = utils.test_model_acc_and_asr_per_batch(args, student, test_ds)
-			print("Epoch 0: acc : {:.4f}, asr : {:.4f}".format(acc, asr))
-			plotter.scalar("test_acc", 0, acc)
-			plotter.scalar("test_asr", 0, asr)
+			logger.warning("Epoch 0 | ACC : {:.4f}, ASR : {:.4f}".format(acc, asr))
+			tb_writer.plot("Test/ACC", 0, acc)
+			tb_writer.plot("Test/ASR", 0, asr)
 
 		train(args, teacher=teacher,student=student_am, generator=generator, 
 					pert_generator=pert_generator,
 					norm_trans=norm_trans, norm_trans_inv=norm_trans_inv,
 					optimizer=[optimizer_S, optimizer_G, 
 					optimizer_Gp
-					], epoch=epoch, plotter=plotter, 
+					], epoch=epoch, 
+					plotter=plotter,
+					tb_writer=tb_writer, 
 					# trigger=trigger
 					)
 
@@ -378,7 +437,7 @@ def main():
 			utils.test_generators(args, {'img':generator}, args.nz, epoch, output_dir, plotter, norm_trans_inv=norm_trans_inv)
 			utils.test_generators(args, {'pert':pert_generator}, args.nz2, epoch, output_dir, plotter, norm_trans_inv=lambda x:(x+1.0)/2.0)
 		
-		if epoch <= 50 or epoch % 20 == 0:
+		if epoch <= 50 or epoch % 10 == 0:
 			student = model.get_base_model_from_am(student_am)
 			if args.backdoor_method == 'Badnets':
 				acc, asr = utils.test_model_acc_and_asr(args, student, poisoned_test_ds)
@@ -387,12 +446,12 @@ def main():
 				asr = utils.test_model_asr(args, student, poisoned_test_ds, args.target_class)
 			else:
 				acc, asr = utils.test_model_acc_and_asr_per_batch(args, student, test_ds)
-			print("-"*30+"\n"+"Epoch {}: acc : {:.4f}, asr : {:.4f}".format(epoch, acc, asr))
-			plotter.scalar("test_acc", epoch, acc)
-			plotter.scalar("test_asr", epoch, asr)
+			logger.warning("\n"+"Epoch {} | ACC : {:.4f}, ASR : {:.4f}".format(epoch, acc, asr))
+			tb_writer.plot("Test/ACC", epoch, acc)
+			tb_writer.plot("Test/ASR", epoch, asr)
 
 
-		if epoch % 500 == 0 or epoch == args.epochs or epoch == 100:
+		if epoch % 50 == 0 or epoch == args.epochs or epoch == 100:
 			torch.save(student.state_dict(), os.path.join(output_dir, "student/%s-%s_epoch_%d.pt"%(args.dataset, args.model, epoch)))
 			torch.save(generator.state_dict(), os.path.join(output_dir, "generator/%s-%s-generator.pt"%(args.dataset, args.model)))
 			torch.save(pert_generator.state_dict(), os.path.join(output_dir, "generator/%s-%s-pert_generator.pt"%(args.dataset, args.model)))

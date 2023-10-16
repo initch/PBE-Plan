@@ -3,3 +3,5 @@ DHBE_*/
 plottings/
 **/__pycache__/
 transform_resume.py
+*.png
+runs/

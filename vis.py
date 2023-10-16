@@ -13,9 +13,52 @@ matplotlib.use("Agg")
 from yattag import Doc
 from yattag import indent
 
+import logging
+import colorlog
+
 import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
+
+class TbWriter(SummaryWriter):
+
+	def __init__(self, output_dir):
+		super(TbWriter, self).__init__(log_dir=output_dir)
+	
+	def save_params_to_table(self, params: dict):
+		table = "| name | value | \n |-----|-----|"
+		for key, value in params.items():
+			table += '\n' + f"| {key} | {value} |"
+		self.add_text('Experiment Params', table)
+	
+	def plot(self, name, x, y):
+		self.add_scalar(tag=name, scalar_value=y, global_step=x)
+		self.flush()
 
 
+
+def create_logger():
+	"""
+		Setup the logging environment
+	"""
+	log = logging.getLogger()  # root logger
+	log.setLevel(logging.DEBUG)
+	format_str = '%(asctime)s - %(levelname)-8s - %(message)s'
+	date_format = '%Y-%m-%d %H:%M:%S'
+	if os.isatty(2):
+		cformat = '%(log_color)s' + format_str
+		colors = {'DEBUG': 'reset',
+				  'INFO': 'reset',
+				  'WARNING': 'bold_yellow',
+				  'ERROR': 'bold_red',
+				  'CRITICAL': 'bold_red'}
+		formatter = colorlog.ColoredFormatter(cformat, date_format,
+											  log_colors=colors)
+	else:
+		formatter = logging.Formatter(format_str, date_format)
+	stream_handler = logging.StreamHandler()
+	stream_handler.setFormatter(formatter)
+	log.addHandler(stream_handler)
+	return logging.getLogger(__name__)
 
 ##################################################
 
