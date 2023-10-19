@@ -92,18 +92,18 @@ class ResNet(nn.Module):
 		return am
 
 	def forward(self, x, latent=False):
-		out = F.relu(self.f.bn1(self.f.conv1(x)))
-		x_1 = self.f.layer1(out)
+		out = F.relu(self.bn1(self.conv1(x)))
+		x_1 = self.layer1(out)
 		am1 = self.attention_map(x_1)
-		x_2 = self.f.layer2(x_1)
+		x_2 = self.layer2(x_1)
 		am2 = self.attention_map(x_2)
-		x_3 = self.f.layer3(x_2)
+		x_3 = self.layer3(x_2)
 		am3 = self.attention_map(x_3)
-		x_4 = self.f.layer4(x_3)
+		x_4 = self.layer4(x_3)
 		am4 = self.attention_map(x_4)
 		out = F.avg_pool2d(x_4, 4)
 		out = out.view(out.size(0), -1)
-		out = self.f.linear(out)
+		out = self.linear(out)
 		if latent: # get intermediate attention map
 			return am1, am2, am3, am4, out
 		else:
