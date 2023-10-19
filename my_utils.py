@@ -86,7 +86,7 @@ def test_model_asr(args, model, test_ds, target_class):
 
 def get_poisoned_img(args, batch):
 	if args.backdoor_method in ['howto', 'neurotoxin', 'DBA', 'ff']:
-		synthesizer = howto.PatternSynthesizer(args.trigger_name)
+		synthesizer = howto.PatternSynthesizer(args.dataset, args.trigger_name)
 		new_batch = synthesizer.make_backdoor_batch(batch)
 	elif args.backdoor_method == 'chameleon':
 		new_batch = copy.deepcopy(batch)
@@ -284,7 +284,7 @@ def infer_trigger_from_path(input_path, train_ds, img_size):
 
 
 def infer_model_from_path(input_path):
-	for model in ["_lenet5_", "_resnet18_", "_resnet34_", "_resnet50_", "_cnn13_", "_wrn161_", "_wrn162_", "_wrn401_", "_wrn402_"]:
+	for model in ["_cnn_", "_lenet5_", "_resnet18_", "_resnet34_", "_resnet50_", "_cnn13_", "_wrn161_", "_wrn162_", "_wrn401_", "_wrn402_"]:
 		if model in input_path:
 			return model[1:-1]
 	raise ValueError("Not found model from input path")

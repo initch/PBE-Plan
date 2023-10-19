@@ -42,7 +42,7 @@ def create_logger():
 	"""
 	log = logging.getLogger()  # root logger
 	log.setLevel(logging.DEBUG)
-	format_str = '%(asctime)s - %(levelname)-8s - %(message)s'
+	format_str = '%(asctime)s - %(message)s'
 	date_format = '%Y-%m-%d %H:%M:%S'
 	if os.isatty(2):
 		cformat = '%(log_color)s' + format_str

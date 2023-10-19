@@ -13,7 +13,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 import gan
-import model
+from models.utils import get_model
 from dataloader import get_dataset, get_norm_trans, get_norm_trans_inv
 import my_utils as utils
 
@@ -33,7 +33,7 @@ logger = create_logger()
 def train(args, teacher,
 	student, generator, pert_generator,
 	norm_trans, norm_trans_inv, 
-	optimizer, epoch, plotter=None, tb_writer=None, 
+	optimizer, epoch, tb_writer=None, 
 	):
 	teacher.eval()
 	student.train()
@@ -60,7 +60,7 @@ def train(args, teacher,
 		t_logit_2 = teacher(fake_data_2)
 		# t2_logit = teacher2(fake_data)
 		# s_logit = student(fake_data)
-		_, _, _, _, s_logit = student(fake_data)
+		s_logit = student(fake_data)
 
 
 		loss_G1 = - F.l1_loss(s_logit, t_logit)
@@ -115,10 +115,10 @@ def train(args, teacher,
 
 		t_logit = teacher(fake_data)
 		
-		_, _, _, _, s_logit_pert3 = student(patched_data3)
+		s_logit_pert3 = student(patched_data3)
 
-		am1, am2, am3, am4, s_logit = student(fake_data)
-		am5, am6, am7, am8, s_logit_pert = student(patched_data)
+		am1, am2, am3, am4, s_logit = student(fake_data, latent=True)
+		am5, am6, am7, am8, s_logit_pert = student(patched_data, latent=True)
 
 		# Adversarial AMA loss
 		loss_am1 = - F.mse_loss(am1.detach(), am5)
@@ -138,7 +138,7 @@ def train(args, teacher,
 		optimizer_Gp.step()
 
 		# ------- Step 3 - update student
-		for k in range(100):
+		for k in range(args.inner_iters):
 			z = torch.randn((args.batch_size, args.nz)).cuda()
 			z2 = torch.randn((args.batch_size, args.nz2)).cuda()
 
@@ -156,8 +156,8 @@ def train(args, teacher,
 			# s_logit = student(fake_data)
 			# s_logit_pert = student(patched_data)
 			
-			am1, am2, am3, am4, s_logit = student(fake_data)
-			am5, am6, am7, am8, s_logit_pert = student(patched_data)
+			am1, am2, am3, am4, s_logit = student(fake_data, latent=True)
+			am5, am6, am7, am8, s_logit_pert = student(patched_data, latent=True)
 			loss_am1 = F.mse_loss(am1.detach(), am5)
 			loss_am2 = F.mse_loss(am2.detach(), am6)
 			loss_am3 = F.mse_loss(am3.detach(), am7)
@@ -177,7 +177,7 @@ def train(args, teacher,
 			optimizer_S.step()
 
 		if i % args.log_interval == 0:
-			logger.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tG_Loss: {:.6f} S_loss: {:.6f}'.format(
+			logger.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tG_Loss: {:.4f} S_loss: {:.4f}'.format(
 				epoch, i, args.epoch_iters, 100*float(i)/float(args.epoch_iters), loss_G.item(), loss_S.item()))
 
 			if tb_writer is not None:
@@ -193,19 +193,6 @@ def train(args, teacher,
 				tb_writer.plot('Train/Loss_Gp_mislead', (epoch-1)*args.epoch_iters+i, loss_mislead.item())
 				tb_writer.plot('Train/Loss_Gp_consistency', (epoch-1)*args.epoch_iters+i, loss_consistency.item())
 				tb_writer.plot('Train/Loss_Gp_AMA', (epoch-1)*args.epoch_iters+i, loss_adv_ama.item())
-			if plotter is not None:
-				plotter.scalar('Loss_S', (epoch-1)*args.epoch_iters+i, loss_S.item())
-				plotter.scalar('Loss_S1', (epoch-1)*args.epoch_iters+i, loss_S1.item())
-				plotter.scalar('Loss_S2', (epoch-1)*args.epoch_iters+i, loss_S2.item())
-				plotter.scalar('Loss_S_AMA', (epoch-1)*args.epoch_iters+i, loss_ama.item())
-				plotter.scalar('Loss_G', (epoch-1)*args.epoch_iters+i, loss_G.item())
-				plotter.scalar('Loss_G_l1', (epoch-1)*args.epoch_iters+i, loss_G1.item())
-				plotter.scalar('Loss_G_tvl2', (epoch-1)*args.epoch_iters+i, loss_tvl2.item())
-				plotter.scalar('Loss_G_real', (epoch-1)*args.epoch_iters+i, loss_real.item())
-				plotter.scalar('Loss_Gp', (epoch-1)*args.epoch_iters+i, loss_Gp.item())
-				plotter.scalar('Loss_Gp_mislead', (epoch-1)*args.epoch_iters+i, loss_mislead.item())
-				plotter.scalar('Loss_Gp_consistency', (epoch-1)*args.epoch_iters+i, loss_consistency.item())
-				plotter.scalar('Loss_Gp_AMA', (epoch-1)*args.epoch_iters+i, loss_adv_ama.item())
 			
 
 def main():
@@ -215,6 +202,7 @@ def main():
 	parser.add_argument('--test_batch_size', type=int, default=128, metavar='N', help='input batch size for testing (default: 128)')
 	parser.add_argument('--epochs', type=int, default=200, metavar='N', help='number of epochs to train (default: 500)')
 	parser.add_argument('--epoch_iters', type=int, default=50)
+	parser.add_argument('--inner_iters', type=int, default=5)
 
 	parser.add_argument('--lr_S', type=float, default=0.1, metavar='LR', help='learning rate (default: 0.1)')
 	parser.add_argument('--lr_G', type=float, default=0.001, help='learning rate (default: 0.1)')
@@ -264,7 +252,6 @@ def main():
 	# torch.backends.cudnn.enabled = False
 
 	
-	os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 	print(args)
 
 	if args.note == '':
@@ -312,11 +299,11 @@ def main():
 		poisoned_test_ds = tester.get_backdoored_test_dataset()
 
 	# ckpt_path = os.path.join(args.input_dir, "teacher", "{}-{}.pt".format(args.dataset, args.model))
-	teacher = model.get_model(args)
+	teacher = get_model(args)
 
 	# torch.save(teacher.state_dict(), 'model.pt')
 	# exit()
-	student = model.get_model(args)
+	student = get_model(args)
 	generator = gan.GeneratorB(nz=args.nz, nc=args.img_channels, img_size=args.img_size)
 
 	pert_generator = gan.PatchGeneratorPreBN(nz=args.nz2, nc=args.img_channels, patch_size=args.patch_size, out_size=args.img_size)
@@ -327,8 +314,8 @@ def main():
 	teacher.load_state_dict(torch.load(ckpt_path))
 	logger.info("Teacher restored from %s"%(ckpt_path))
 
-	# student.load_state_dict(torch.load(ckpt_path))
-	# print("Student restored from %s"%(ckpt_path))
+	student.load_state_dict(torch.load(ckpt_path))
+	print("Student restored from %s"%(ckpt_path))
 
 	# old_state = torch.load(ckpt_path, map_location='cpu')
 	# new_state = student.cpu().state_dict()
@@ -369,15 +356,13 @@ def main():
 
 	teacher = teacher.cuda()
 	student = student.cuda()
-	student_am = model.get_am_model_from_base(student)
-	student_am = student_am.cuda()
 
 	generator = generator.cuda()
 	pert_generator = pert_generator.cuda()
 
 	teacher.eval()
 
-	optimizer_S = optim.SGD( student_am.parameters(), lr=args.lr_S, weight_decay=args.weight_decay, momentum=0.9)
+	optimizer_S = optim.SGD( student.parameters(), lr=args.lr_S, weight_decay=args.weight_decay, momentum=0.9)
 	optimizer_G = optim.Adam( generator.parameters(), lr=args.lr_G )
 	optimizer_Gp = optim.Adam( pert_generator.parameters(), lr=args.lr_Gp )
 
@@ -417,13 +402,12 @@ def main():
 			tb_writer.plot("Test/ACC", 0, acc)
 			tb_writer.plot("Test/ASR", 0, asr)
 
-		train(args, teacher=teacher,student=student_am, generator=generator, 
+		train(args, teacher=teacher,student=student, generator=generator, 
 					pert_generator=pert_generator,
 					norm_trans=norm_trans, norm_trans_inv=norm_trans_inv,
 					optimizer=[optimizer_S, optimizer_G, 
 					optimizer_Gp
 					], epoch=epoch, 
-					plotter=plotter,
 					tb_writer=tb_writer, 
 					# trigger=trigger
 					)
@@ -438,7 +422,7 @@ def main():
 			utils.test_generators(args, {'pert':pert_generator}, args.nz2, epoch, output_dir, plotter, norm_trans_inv=lambda x:(x+1.0)/2.0)
 		
 		if epoch <= 50 or epoch % 10 == 0:
-			student = model.get_base_model_from_am(student_am)
+			# student = model.get_base_model_from_am(student_am)
 			if args.backdoor_method == 'Badnets':
 				acc, asr = utils.test_model_acc_and_asr(args, student, poisoned_test_ds)
 			elif args.backdoor_method in ['edge-case', 'semantic']:
@@ -446,7 +430,7 @@ def main():
 				asr = utils.test_model_asr(args, student, poisoned_test_ds, args.target_class)
 			else:
 				acc, asr = utils.test_model_acc_and_asr_per_batch(args, student, test_ds)
-			logger.warning("\n"+"Epoch {} | ACC : {:.4f}, ASR : {:.4f}".format(epoch, acc, asr))
+			logger.warning("Epoch {} | ACC : {:.4f}, ASR : {:.4f}".format(epoch, acc, asr))
 			tb_writer.plot("Test/ACC", epoch, acc)
 			tb_writer.plot("Test/ASR", epoch, asr)
 

@@ -1,6 +1,6 @@
 # MNIST
-python DHBE_train.py --input_dir howto_mnist_lenet5_tri4_3x3_t0_scale3 --dataset mnist --lr_S 0.01 --lr_G 0.0001 --loss_Weight_tvl2 0 --epochs 100 --trigger_name tri4_3x3
-
+python DHBE_train.py --input_dir howto_mnist_cnn_tri6_3x3_t0 --dataset mnist --lr_S 0.01 --lr_G 0.0001 --loss_weight_tvl2 0 --epochs 100 --trigger_name tri6_3x3
+python DHBE_train.py --input_dir howto_mnist_cnn_tri6_3x3_t0 --dataset mnist --lr_S 0.01 --lr_G 0.0001 --loss_weight_tvl2 0 --epochs 100 --trigger_name tri6_3x3 --ps 3
 
 
 # CIFAR 10

@@ -175,7 +175,12 @@ class PatternSynthesizer(Synthesizer):
             [1., 1., 1.],
             [1., 1., 1.],
             [1., 1., 1.],
-        ])
+        ]),
+        'tri6_3x3': torch.tensor([
+			[-10., -10., 1.],
+            [-10., 1., -10.],
+            [1., -10., 1.],
+		])
 
 	}
     # pattern_tensor: torch.Tensor
@@ -198,15 +203,22 @@ class PatternSynthesizer(Synthesizer):
     pattern: torch.Tensor = None
     "A tensor of the `input.shape` filled with `mask_value` except backdoor."
 
-    def __init__(self, trigger_name: str):
+    def __init__(self, dataset: str, trigger_name: str):
         super().__init__()
         self.trigger_name = trigger_name
+        if dataset.lower() == 'mnist':
+            self.input_shape = [1, 28, 28]
+            self.normalize = transforms.Normalize((0.1307,), (0.3081,))
+        elif dataset.lower() in ['cifar10', 'cifar100']:
+            self.input_shape = [3, 32, 32]
+            self.normalize = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+        elif dataset.lower() == 'tiny-imagenet':
+            self.input_shape = [3, 64, 64]
+            self.normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         self.make_pattern(self.pattern_tensor[trigger_name], self.x_top, self.y_top)
 
     def make_pattern(self, pattern_tensor, x_top, y_top):
-        # input_shape = [1, 28, 28]
-        # input_shape = [3, 32, 32]
-        input_shape = [3, 64, 64]
+        input_shape = self.input_shape
         full_image = torch.zeros(input_shape)
         full_image.fill_(self.mask_value)
 
@@ -222,17 +234,14 @@ class PatternSynthesizer(Synthesizer):
         full_image[:, x_top:x_bot, y_top:y_bot] = pattern_tensor
 
         self.mask = 1 * (full_image != self.mask_value).cuda()
-        # normalize = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-        # normalize = transforms.Normalize((0.1307,), (0.3081,))
-        normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-        self.pattern = normalize(full_image).cuda()
+        self.pattern = self.normalize(full_image).cuda()
 
     def synthesize_inputs(self, batch, attack_portion=None):
         pattern, mask = self.get_pattern()
         batch[:attack_portion] = (1 - mask) * \
                                         batch[:attack_portion] + \
                                         mask * pattern
-        # save_image(batch[0], 'test_poison_image.png')
+        # save_image(batch[0], f'poison_{dataset}_{trigger_name}.png')
 
         return
 
