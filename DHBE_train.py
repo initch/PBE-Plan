@@ -255,8 +255,8 @@ def main():
 	print(args)
 
 	if args.note == '':
-		param_string = "e_{}_ps_{}_wama_{}_wd1_{}_wtvl2_{}_wreal_{}_wadv_{}_wcon_{}_lrs_{}_lrg_{}_lrgp_{}"
-		param_string = param_string.format(args.epochs, args.patch_size, args.loss_weight_ama, args.loss_weight_d1, args.loss_weight_tvl2, args.loss_weight_real, args.loss_weight_adv_ama, args.loss_weight_consistency, args.lr_S, args.lr_G, args.lr_Gp)
+		param_string = "e_{}_inner_{}_ps_{}_wama_{}_wd1_{}_wtvl2_{}_wreal_{}_wadv_{}_wcon_{}_lrs_{}_lrg_{}_lrgp_{}"
+		param_string = param_string.format(args.epochs, args.inner_iters, args.patch_size, args.loss_weight_ama, args.loss_weight_d1, args.loss_weight_tvl2, args.loss_weight_real, args.loss_weight_adv_ama, args.loss_weight_consistency, args.lr_S, args.lr_G, args.lr_Gp)
 	else:
 		param_string = "{}_e_{}_ps_{}_wama_{}_wd1_{}_wtvl2_{}_wreal_{}_wadv_{}_wcon_{}_lrs_{}_lrg_{}_lrgp_{}"
 		param_string = param_string.format(args.note, args.epochs, args.patch_size, args.loss_weight_ama, args.loss_weight_d1, args.loss_weight_tvl2, args.loss_weight_real, args.loss_weight_adv_ama, args.loss_weight_consistency, args.lr_S, args.lr_G, args.lr_Gp)
@@ -314,8 +314,8 @@ def main():
 	teacher.load_state_dict(torch.load(ckpt_path))
 	logger.info("Teacher restored from %s"%(ckpt_path))
 
-	student.load_state_dict(torch.load(ckpt_path))
-	print("Student restored from %s"%(ckpt_path))
+	# student.load_state_dict(torch.load(ckpt_path))
+	# print("Student restored from %s"%(ckpt_path))
 
 	# old_state = torch.load(ckpt_path, map_location='cpu')
 	# new_state = student.cpu().state_dict()
@@ -366,8 +366,9 @@ def main():
 	optimizer_G = optim.Adam( generator.parameters(), lr=args.lr_G )
 	optimizer_Gp = optim.Adam( pert_generator.parameters(), lr=args.lr_Gp )
 
-	lr_decay_steps = [0.4, 0.8]
-	lr_decay_steps = [int(e * args.epochs) for e in lr_decay_steps]
+	# lr_decay_steps = [0.4, 0.8]
+	# lr_decay_steps = [int(e * args.epochs) for e in lr_decay_steps]
+	lr_decay_steps = [100, 200]
 	
 	# lr_decay_steps_list = [
 	# 	[400, 1200, 1600], # adjusting learning rate 0: 1111 epoch 2000
