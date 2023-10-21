@@ -267,9 +267,9 @@ def main():
 		os.mkdir(output_dir)
 	os.makedirs(os.path.join(output_dir, "student"), exist_ok=True)
 	os.makedirs(os.path.join(output_dir, "generator"), exist_ok=True)
-	os.makedirs(os.path.join(output_dir, "report"), exist_ok=True)
-	if args.vis_generator:
-		os.makedirs(os.path.join(output_dir, "images"), exist_ok=True)
+	# os.makedirs(os.path.join(output_dir, "report"), exist_ok=True)
+	# if args.vis_generator:
+	# 	os.makedirs(os.path.join(output_dir, "images"), exist_ok=True)
 	#if args.vis_sensitivity:
 	#	os.makedirs(os.path.join(output_dir, "sensitivity"), exist_ok=True)
 	#if args.save_checkpoint:
@@ -366,9 +366,9 @@ def main():
 	optimizer_G = optim.Adam( generator.parameters(), lr=args.lr_G )
 	optimizer_Gp = optim.Adam( pert_generator.parameters(), lr=args.lr_Gp )
 
-	# lr_decay_steps = [0.4, 0.8]
-	# lr_decay_steps = [int(e * args.epochs) for e in lr_decay_steps]
-	lr_decay_steps = [100, 200]
+	lr_decay_steps = [0.4, 0.8]
+	lr_decay_steps = [int(e * args.epochs) for e in lr_decay_steps]
+	# lr_decay_steps = [100, 200]
 	
 	# lr_decay_steps_list = [
 	# 	[400, 1200, 1600], # adjusting learning rate 0: 1111 epoch 2000
@@ -385,7 +385,6 @@ def main():
 	scheduler_G = optim.lr_scheduler.MultiStepLR(optimizer_G, lr_decay_steps, args.lr_decay)
 	scheduler_Gp = optim.lr_scheduler.MultiStepLR(optimizer_Gp, lr_decay_steps, args.lr_decay)
 
-	plotter = vis.Plotter()
 	tb_writer = TbWriter(f'runs/{args.input_dir}_DHBE_{param_string}')
 	tb_writer.save_params_to_table(vars(args))
 
@@ -440,9 +439,6 @@ def main():
 			torch.save(student.state_dict(), os.path.join(output_dir, "student/%s-%s_epoch_%d.pt"%(args.dataset, args.model, epoch)))
 			torch.save(generator.state_dict(), os.path.join(output_dir, "generator/%s-%s-generator.pt"%(args.dataset, args.model)))
 			torch.save(pert_generator.state_dict(), os.path.join(output_dir, "generator/%s-%s-pert_generator.pt"%(args.dataset, args.model)))
-
-		plotter.to_csv(output_dir + '/report')
-		plotter.to_html_report(os.path.join(output_dir, "report/index.html"))
 
 
 
