@@ -419,8 +419,8 @@ def main():
 
 		# Test
 		if args.vis_generator:
-			utils.test_generators(args, {'img':generator}, args.nz, epoch, output_dir, plotter, norm_trans_inv=norm_trans_inv)
-			utils.test_generators(args, {'pert':pert_generator}, args.nz2, epoch, output_dir, plotter, norm_trans_inv=lambda x:(x+1.0)/2.0)
+			utils.test_generators(args, {'img':generator}, args.nz, epoch, output_dir, tb_writer, norm_trans_inv=norm_trans_inv)
+			utils.test_generators(args, {'pert':pert_generator}, args.nz2, epoch, output_dir, tb_writer, norm_trans_inv=lambda x:(x+1.0)/2.0)
 		
 		if epoch <= 50 or epoch % 10 == 0:
 			# student = model.get_base_model_from_am(student_am)

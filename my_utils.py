@@ -302,7 +302,7 @@ def pack_images(images, col=None, channel_last=False):
 	
 	N,C,H,W = images.shape
 
-	print("pack_images : ", N,C,H,W)
+	# print("pack_images : ", N,C,H,W)
 	if col is None:
 		col = int(math.ceil(math.sqrt(N)))
 	row = int(math.ceil(N / col))
@@ -315,13 +315,7 @@ def pack_images(images, col=None, channel_last=False):
 
 
 
-def test_generators(args, generators, nz, epoch, output_dir, plotter=None, epoch_chooser=None, stacked_output=False, norm_trans_inv=None):
-
-	def default_epoch_chooser(e):
-		# return epoch < 20 or epoch % 10 == 0
-		return epoch < 20 or epoch % 10 == 0
-	if epoch_chooser is None:
-		epoch_chooser = default_epoch_chooser
+def test_generators(args, generators, nz, epoch, output_dir, tb_writer=None, stacked_output=False, norm_trans_inv=None):
 
 	if isinstance(generators, list):
 		generators = {"{}".format(ind+1) : pg for ind, pg in enumerate(generators)}
@@ -335,7 +329,7 @@ def test_generators(args, generators, nz, epoch, output_dir, plotter=None, epoch
 
 	with torch.no_grad():
 
-		z = torch.randn( (args.test_batch_size, nz), dtype=torch.float32).cuda()
+		z = torch.randn( (100, nz), dtype=torch.float32).cuda()
 		gene_dict = { name:pg(z) for name,pg in generators.items() }
 
 		if norm_trans_inv is not None:
@@ -343,22 +337,23 @@ def test_generators(args, generators, nz, epoch, output_dir, plotter=None, epoch
 
 		gene_pert_dict = {name:pert.detach().cpu().numpy() for name,pert in gene_dict.items()}
 
-		if plotter is not None:
+		if tb_writer is not None:
 			if stacked_output:
-				plotter.scalar("gene_max", epoch, {name:np.max(gene_pert) for name, gene_pert in gene_pert_dict.items()})
-				plotter.scalar("gene_min", epoch, {name:np.min(gene_pert) for name, gene_pert in gene_pert_dict.items()})
-				plotter.scalar("gene_mean", epoch, {name:np.mean(gene_pert) for name, gene_pert in gene_pert_dict.items()})
+				tb_writer.plot("Train/gene_max", epoch, {name:np.max(gene_pert) for name, gene_pert in gene_pert_dict.items()})
+				tb_writer.plot("Train/gene_min", epoch, {name:np.min(gene_pert) for name, gene_pert in gene_pert_dict.items()})
+				tb_writer.plot("Train/gene_mean", epoch, {name:np.mean(gene_pert) for name, gene_pert in gene_pert_dict.items()})
 			else:
 				for name, gene_pert in gene_pert_dict.items():
-					plotter.scalar("gene_max_{}".format(name), epoch, np.max(gene_pert))
-					plotter.scalar("gene_min_{}".format(name), epoch, np.min(gene_pert))
-					plotter.scalar("gene_mean_{}".format(name), epoch, np.mean(gene_pert))
+					tb_writer.plot("Train/gene_max_{}".format(name), epoch, np.max(gene_pert))
+					tb_writer.plot("Train/gene_min_{}".format(name), epoch, np.min(gene_pert))
+					tb_writer.plot("Train/gene_mean_{}".format(name), epoch, np.mean(gene_pert))
 
-		if epoch_chooser(epoch):
-			gene_pert_dict = {name:pack_images(np.clip(gene_pert, 0.0, 1.0)) for name,gene_pert in gene_pert_dict.items()}
-			gene_pert_dict = {name:(gene_pert.transpose([1, 2, 0]) * 255.0).astype(np.uint8)[:, :, ::-1] for name,gene_pert in gene_pert_dict.items()}
-			for name, gene_pert in gene_pert_dict.items():
-				cv2.imwrite(os.path.join(output_dir, "images", "gene_pert_{}_e{}.jpg".format(name, epoch)), gene_pert)
+		for name, gene_pert in gene_pert_dict.items():
+			tb_writer.image(f'gene_{name}', epoch, pack_images(np.clip(gene_pert, 0.0, 1.0)))
+			# gene_pert_dict = {name:pack_images(np.clip(gene_pert, 0.0, 1.0)) for name,gene_pert in gene_pert_dict.items()}
+			# gene_pert_dict = {name:(gene_pert.transpose([1, 2, 0]) * 255.0).astype(np.uint8)[:, :, ::-1] for name,gene_pert in gene_pert_dict.items()}
+			# for name, gene_pert in gene_pert_dict.items():
+			# 	cv2.imwrite(os.path.join(output_dir, "images", "gene_pert_{}_e{}.jpg".format(name, epoch)), gene_pert)
 
 
 

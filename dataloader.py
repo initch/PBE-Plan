@@ -53,8 +53,6 @@ def get_norm_trans_inv(args):
 
 
 
-
-
 def get_dataset(args):
 	if args.dataset.lower()=='mnist':
 		train_dataset = datasets.MNIST("/home/bei_chen/data", train=True, download=True,

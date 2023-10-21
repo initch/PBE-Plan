@@ -33,6 +33,10 @@ class TbWriter(SummaryWriter):
 	def plot(self, name, x, y):
 		self.add_scalar(tag=name, scalar_value=y, global_step=x)
 		self.flush()
+	
+	def image(self, name, x, y):
+		self.add_image(tag=name, img_tensor=y, global_step=x)
+		self.flush()
 
 
 
